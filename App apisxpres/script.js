@@ -7,6 +7,9 @@ let carrito = {};
 let pedidoCounter = 0;
 let gastosDia = [];
 const ADMIN_PASSWORD = '123';
+let currentSessionKey = null;
+let currentSessionStart = null; // ISO string
+let currentSessionEnd = null;   // ISO string
 
 // --- Persistencia por sesión/fecha ---
 function getSessionKey(date = new Date()) {
@@ -17,13 +20,17 @@ function getSessionKey(date = new Date()) {
 }
 
 function saveSession() {
-    const key = getSessionKey();
+    const key = currentSessionKey || getSessionKey();
     const payload = {
         cajaAbierta,
         usuarioActual,
         montoInicial,
         pedidosDia,
         historialDeCambios,
+        sessionMeta: {
+            start: currentSessionStart || null,
+            end: currentSessionEnd || null
+        },
         pedidoCounter,
         gastosDia,
         carrito
@@ -75,6 +82,17 @@ function loadSession(date = new Date()) {
 }
 
 function listSessions() {
+    // Prefer index if exists
+    try {
+        const idxRaw = localStorage.getItem('sessions_index');
+        if (idxRaw) {
+            const idx = JSON.parse(idxRaw);
+            return idx.slice().reverse(); // devolver más recientes primero
+        }
+    } catch (e) {
+        console.error('Error leyendo sessions_index', e);
+    }
+
     const keys = Object.keys(localStorage).filter(k => k.startsWith('session_')).sort().reverse();
     return keys.map(k => ({ key: k, date: k.replace('session_', '') }));
 }
@@ -381,6 +399,11 @@ document.getElementById('formInicio').addEventListener('submit', function(e) {
     pedidosDia = []; // Iniciar un nuevo día de pedidos
     historialDeCambios = []; // Iniciar un nuevo historial de cambios
     gastosDia = []; // Iniciar un nuevo día de gastos
+
+    // Iniciar metadata de sesión
+    currentSessionStart = new Date().toISOString();
+    // key con timestamp para permitir múltiples sesiones por día
+    currentSessionKey = `session_${new Date().toISOString().replace(/[:.]/g, '-')}`;
 
     document.getElementById('statusInicio').innerHTML = `
         <p>✅ Caja ABIERTA por: ${usuarioActual}<br>
@@ -952,8 +975,39 @@ window.cerrarCajaDefinitivo = function() {
     }
 
     if (confirm('¡ATENCIÓN! ¿Está seguro de que desea CERRAR LA CAJA y borrar todos los datos del día?')) {
+        // Registrar hora de fin y guardar la sesión final
+        currentSessionEnd = new Date().toISOString();
+        // Guardar la sesión final con metadata
+        saveSession();
+
+        // Mantener un índice de sesiones para listar (sessions_index)
+        try {
+            const idxRaw = localStorage.getItem('sessions_index');
+            const idx = idxRaw ? JSON.parse(idxRaw) : [];
+            // calcular totales
+            const totalVentas = pedidosDia.reduce((sum, p) => sum + p.total, 0);
+            const totalGastos = gastosDia.reduce((sum, g) => sum + g.monto, 0);
+            idx.push({
+                key: currentSessionKey,
+                usuario: usuarioActual,
+                start: currentSessionStart,
+                end: currentSessionEnd,
+                totalVentas,
+                totalGastos,
+                pedidos: pedidosDia.length
+            });
+            localStorage.setItem('sessions_index', JSON.stringify(idx));
+        } catch (e) {
+            console.error('Error actualizando sessions_index', e);
+        }
+
         limpiarEstado();
-        alert('Caja cerrada con éxito. Los datos del día han sido borrados.');
+        // Reset metadata
+        currentSessionKey = null;
+        currentSessionStart = null;
+        currentSessionEnd = null;
+
+        alert('Caja cerrada con éxito. Los datos del día han sido borrados y la sesión fue archivada.');
         showTab('inicio');
     }
 }
@@ -976,12 +1030,98 @@ window.exportSession = function() {
 
 window.listSessionsUI = function() {
     const sessions = listSessions();
-    if (sessions.length === 0) {
-        alert('No hay sesiones guardadas.');
+    if (!sessions || sessions.length === 0) {
+        showModal('No hay sesiones archivadas.', { input: false });
         return;
     }
-    const msg = sessions.map(s => s.date).join('\n');
-    alert('Sesiones disponibles (más recientes primero):\n' + msg);
+
+    // Construir un contenido HTML simple para mostrar sesiones en modal
+    const modal = document.getElementById('modal');
+    const msgEl = document.getElementById('modal-message');
+    const inputEl = document.getElementById('modal-input');
+
+    // Usaremos el modal-message para contener una lista interactiva
+    msgEl.innerHTML = '';
+    const list = document.createElement('div');
+    list.style.maxHeight = '300px';
+    list.style.overflow = 'auto';
+    sessions.forEach(s => {
+        const row = document.createElement('div');
+        row.style.borderBottom = '1px solid #eee';
+        row.style.padding = '8px 0';
+
+        const title = document.createElement('div');
+        title.innerHTML = `<strong>${s.key || s.date}</strong> — ${s.usuario || ''}`;
+        const times = document.createElement('div');
+        times.style.fontSize = '0.9em';
+        times.style.color = '#555';
+        const start = s.start ? new Date(s.start).toLocaleString() : (s.date || '—');
+        const end = s.end ? new Date(s.end).toLocaleString() : 'En progreso';
+        times.textContent = `Inicio: ${start} | Fin: ${end} | Pedidos: ${s.pedidos || 'N/A'} | Ventas: Bs ${Number(s.totalVentas || 0).toFixed(2)}`;
+
+        const actions = document.createElement('div');
+        actions.style.marginTop = '6px';
+
+        const loadBtn = document.createElement('button');
+        loadBtn.type = 'button';
+        loadBtn.textContent = 'Cargar';
+        loadBtn.addEventListener('click', () => {
+            if (s.key) {
+                loadSessionFromKey(s.key);
+            } else {
+                // fallback: try to build key from date
+                const k = `session_${s.date}`;
+                loadSessionFromKey(k);
+            }
+            // cerrar modal
+            document.getElementById('modal').style.display = 'none';
+        });
+
+        const delBtn = document.createElement('button');
+        delBtn.type = 'button';
+        delBtn.style.backgroundColor = '#f44336';
+        delBtn.textContent = 'Eliminar';
+        delBtn.addEventListener('click', async () => {
+            const pw = await showModal('Ingrese contraseña para eliminar esta sesión:', { input: true });
+            if (pw === null) return;
+            if (pw !== ADMIN_PASSWORD) {
+                showToast('Contraseña incorrecta');
+                return;
+            }
+            // eliminar de storage
+            if (s.key) {
+                localStorage.removeItem(s.key);
+            }
+            // también eliminar del índice si existe
+            try {
+                const idxRaw = localStorage.getItem('sessions_index');
+                if (idxRaw) {
+                    const idx = JSON.parse(idxRaw).filter(x => x.key !== s.key);
+                    localStorage.setItem('sessions_index', JSON.stringify(idx));
+                }
+            } catch (e) { console.error(e); }
+            showToast('Sesión eliminada');
+            // refrescar lista
+            msgEl.innerHTML = '';
+            document.getElementById('modal').style.display = 'none';
+            setTimeout(() => window.listSessionsUI(), 300);
+        });
+
+        actions.appendChild(loadBtn);
+        actions.appendChild(delBtn);
+
+        row.appendChild(title);
+        row.appendChild(times);
+        row.appendChild(actions);
+        list.appendChild(row);
+    });
+
+    msgEl.appendChild(list);
+    inputEl.style.display = 'none';
+    // mostrar modal con botón OK como cerrar
+    const okBtn = document.getElementById('modal-ok');
+    okBtn.textContent = 'Cerrar';
+    document.getElementById('modal').style.display = 'flex';
 }
 
 window.importSessionFromFile = function(event) {
