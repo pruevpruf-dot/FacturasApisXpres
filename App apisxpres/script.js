@@ -6,7 +6,8 @@ let historialDeCambios = []; // NUEVA VARIABLE
 let carrito = {};
 let pedidoCounter = 0;
 let gastosDia = [];
-const ADMIN_PASSWORD = '123';
+// Contraseña de administrador (usar una sola constante)
+const ADMIN_PASSWORD = '1234';
 
 // 🚨 PRECIOS ACTUALIZADOS 🚨
 const precios = {
@@ -523,16 +524,43 @@ window.iniciarEdicionPedido = function(pedidoId) {
     document.querySelectorAll('[id^="cliente-display-"]').forEach(d => d.style.display = 'inline');
 
 
+    // Mostrar formulario de edición utilizando elementos DOM (evita inyección/errores por comillas)
     currentDisplay.style.display = 'none';
     formContainer.style.display = 'block';
 
-    formContainer.innerHTML = `
-        <label for="nuevoCliente-${pedidoId}">Nuevo Cliente:</label>
-        <input type="text" id="nuevoCliente-${pedidoId}" value="${pedido.cliente}" placeholder="Nombre del cliente" required>
-        <button onclick="guardarEdicionPedido(${pedidoId}, document.getElementById('nuevoCliente-${pedidoId}').value, '${pedido.cliente}')">Guardar</button>
-        <button style="background-color: #6c757d !important;" onclick="cancelarEdicionPedido(${pedidoId})">Cancelar</button>
-    `;
-    document.getElementById(`nuevoCliente-${pedidoId}`).focus();
+    // Limpiar contenedor
+    formContainer.innerHTML = '';
+
+    const label = document.createElement('label');
+    label.htmlFor = `nuevoCliente-${pedidoId}`;
+    label.textContent = 'Nuevo Cliente:';
+
+    const inputEl = document.createElement('input');
+    inputEl.type = 'text';
+    inputEl.id = `nuevoCliente-${pedidoId}`;
+    inputEl.value = pedido.cliente || '';
+    inputEl.placeholder = 'Nombre del cliente';
+    inputEl.required = true;
+
+    const saveBtn = document.createElement('button');
+    saveBtn.type = 'button';
+    saveBtn.textContent = 'Guardar';
+    saveBtn.addEventListener('click', () => {
+        guardarEdicionPedido(pedidoId, inputEl.value, pedido.cliente);
+    });
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.type = 'button';
+    cancelBtn.style.backgroundColor = '#6c757d';
+    cancelBtn.textContent = 'Cancelar';
+    cancelBtn.addEventListener('click', () => cancelarEdicionPedido(pedidoId));
+
+    formContainer.appendChild(label);
+    formContainer.appendChild(inputEl);
+    formContainer.appendChild(saveBtn);
+    formContainer.appendChild(cancelBtn);
+
+    inputEl.focus();
 }
 
 /**
