@@ -8,6 +8,77 @@ let pedidoCounter = 0;
 let gastosDia = [];
 const ADMIN_PASSWORD = '123';
 
+// --- Persistencia por sesión/fecha ---
+function getSessionKey(date = new Date()) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `session_${y}-${m}-${d}`;
+}
+
+function saveSession() {
+    const key = getSessionKey();
+    const payload = {
+        cajaAbierta,
+        usuarioActual,
+        montoInicial,
+        pedidosDia,
+        historialDeCambios,
+        pedidoCounter,
+        gastosDia,
+        carrito
+    };
+    localStorage.setItem(key, JSON.stringify(payload));
+    // También actualizar claves antiguas por compatibilidad (opcional)
+    localStorage.setItem('pedidosDia', JSON.stringify(pedidosDia));
+    localStorage.setItem('gastosDia', JSON.stringify(gastosDia));
+}
+
+function loadSession(date = new Date()) {
+    const key = getSessionKey(date);
+    const raw = localStorage.getItem(key);
+    if (raw) {
+        try {
+            const s = JSON.parse(raw);
+            cajaAbierta = !!s.cajaAbierta;
+            usuarioActual = s.usuarioActual || '';
+            montoInicial = parseFloat(s.montoInicial) || 0;
+            pedidosDia = Array.isArray(s.pedidosDia) ? s.pedidosDia : [];
+            historialDeCambios = Array.isArray(s.historialDeCambios) ? s.historialDeCambios : [];
+            pedidoCounter = parseInt(s.pedidoCounter) || 0;
+            gastosDia = Array.isArray(s.gastosDia) ? s.gastosDia : [];
+            carrito = s.carrito || {};
+            return true;
+        } catch (e) {
+            console.error('Error parseando sesión:', e);
+            return false;
+        }
+    }
+
+    // Fallback: intentar cargar claves antiguas si existen
+    try {
+        const pedidosGuardados = localStorage.getItem('pedidosDia');
+        pedidosDia = pedidosGuardados ? JSON.parse(pedidosGuardados) : [];
+        const cambiosGuardados = localStorage.getItem('historialDeCambios');
+        historialDeCambios = cambiosGuardados ? JSON.parse(cambiosGuardados) : [];
+        pedidoCounter = parseInt(localStorage.getItem('pedidoCounter')) || 0;
+        const gastosGuardados = localStorage.getItem('gastosDia');
+        gastosDia = gastosGuardados ? JSON.parse(gastosGuardados) : [];
+        usuarioActual = localStorage.getItem('usuarioActual') || '';
+        montoInicial = parseFloat(localStorage.getItem('montoInicial')) || 0;
+        cajaAbierta = localStorage.getItem('cajaAbierta') === 'true';
+        return true;
+    } catch (e) {
+        console.error('Error cargando estado legacy:', e);
+        return false;
+    }
+}
+
+function listSessions() {
+    const keys = Object.keys(localStorage).filter(k => k.startsWith('session_')).sort().reverse();
+    return keys.map(k => ({ key: k, date: k.replace('session_', '') }));
+}
+
 // 🚨 PRECIOS ACTUALIZADOS 🚨
 const precios = {
     'Api Morado': 7.00, 'Api Blanco': 7.00, 'Api Mixto': 7.00,
@@ -47,16 +118,20 @@ function limpiarEstado() {
 
 function cargarEstadoInicial() {
     try {
-        cajaAbierta = localStorage.getItem('cajaAbierta') === 'true';
-        usuarioActual = localStorage.getItem('usuarioActual') || '';
-        montoInicial = parseFloat(localStorage.getItem('montoInicial')) || 0;
-        const pedidosGuardados = localStorage.getItem('pedidosDia');
-        pedidosDia = pedidosGuardados ? JSON.parse(pedidosGuardados) : [];
-        const cambiosGuardados = localStorage.getItem('historialDeCambios'); // Cargar Cambios
-        historialDeCambios = cambiosGuardados ? JSON.parse(cambiosGuardados) : [];
-        pedidoCounter = parseInt(localStorage.getItem('pedidoCounter')) || 0;
-        const gastosGuardados = localStorage.getItem('gastosDia');
-        gastosDia = gastosGuardados ? JSON.parse(gastosGuardados) : [];
+        // Intentar cargar la sesión del día actual; si no existe, hacer fallback
+        const ok = loadSession(new Date());
+        if (!ok) {
+            cajaAbierta = localStorage.getItem('cajaAbierta') === 'true';
+            usuarioActual = localStorage.getItem('usuarioActual') || '';
+            montoInicial = parseFloat(localStorage.getItem('montoInicial')) || 0;
+            const pedidosGuardados = localStorage.getItem('pedidosDia');
+            pedidosDia = pedidosGuardados ? JSON.parse(pedidosGuardados) : [];
+            const cambiosGuardados = localStorage.getItem('historialDeCambios'); // Cargar Cambios
+            historialDeCambios = cambiosGuardados ? JSON.parse(cambiosGuardados) : [];
+            pedidoCounter = parseInt(localStorage.getItem('pedidoCounter')) || 0;
+            const gastosGuardados = localStorage.getItem('gastosDia');
+            gastosDia = gastosGuardados ? JSON.parse(gastosGuardados) : [];
+        }
 
     } catch (e) {
         console.error('Error cargando estado:', e);
@@ -81,13 +156,60 @@ function cargarEstadoInicial() {
 }
 
 function guardarEstado() {
+    // Guardar en la sesión del día y también en claves legacy para compatibilidad
     localStorage.setItem('cajaAbierta', cajaAbierta.toString());
     localStorage.setItem('usuarioActual', usuarioActual);
     localStorage.setItem('montoInicial', montoInicial.toString());
-    localStorage.setItem('pedidosDia', JSON.stringify(pedidosDia));
     localStorage.setItem('historialDeCambios', JSON.stringify(historialDeCambios)); // Guardar Cambios
     localStorage.setItem('pedidoCounter', pedidoCounter.toString());
-    localStorage.setItem('gastosDia', JSON.stringify(gastosDia));
+    saveSession();
+}
+
+// --- Helpers: modal y toast ---
+function showToast(msg, timeout = 3000) {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+    const t = document.createElement('div');
+    t.className = 'toast';
+    t.textContent = msg;
+    container.appendChild(t);
+    setTimeout(() => t.remove(), timeout);
+}
+
+function showModal(message, { input = false } = {}) {
+    return new Promise((resolve) => {
+        const modal = document.getElementById('modal');
+        const msgEl = document.getElementById('modal-message');
+        const inputEl = document.getElementById('modal-input');
+        const okBtn = document.getElementById('modal-ok');
+        const cancelBtn = document.getElementById('modal-cancel');
+
+        msgEl.textContent = message;
+        inputEl.style.display = input ? 'block' : 'none';
+        inputEl.value = '';
+        modal.style.display = 'flex';
+
+        function cleanup() {
+            okBtn.removeEventListener('click', onOk);
+            cancelBtn.removeEventListener('click', onCancel);
+            modal.style.display = 'none';
+        }
+
+        function onOk() {
+            const value = input ? inputEl.value : true;
+            cleanup();
+            resolve(value);
+        }
+
+        function onCancel() {
+            cleanup();
+            resolve(null);
+        }
+
+        okBtn.addEventListener('click', onOk);
+        cancelBtn.addEventListener('click', onCancel);
+        if (input) inputEl.focus();
+    });
 }
 
 function actualizarBotones() {
@@ -309,7 +431,7 @@ document.getElementById('formPedido').addEventListener('submit', function(e) {
     }
 
     const nuevoPedido = {
-        id: ++pedidoCounter,
+        id: Date.now() + Math.floor(Math.random() * 1000),
         total: totalPedido,
         cliente: cliente,
         usuario: usuarioActual,
@@ -320,15 +442,23 @@ document.getElementById('formPedido').addEventListener('submit', function(e) {
     pedidosDia.push(nuevoPedido);
     guardarEstado();
 
-    let detallesHTML = detallesPedido.map(d =>
-        `<p>${d.cantidad}x ${d.producto} (Bs ${d.precioUnitario.toFixed(2)} c/u) = Bs ${d.subtotal.toFixed(2)}</p>`
-    ).join('');
+    const facturaUsuario = document.getElementById('facturaUsuario');
+    const facturaCliente = document.getElementById('facturaCliente');
+    const facturaDetalles = document.getElementById('facturaDetalles');
+    const facturaTotal = document.getElementById('facturaTotal');
+    const facturaFecha = document.getElementById('facturaFecha');
 
-    document.getElementById('facturaUsuario').innerHTML = usuarioActual;
-    document.getElementById('facturaCliente').innerHTML = `Cliente: ${cliente}`;
-    document.getElementById('facturaDetalles').innerHTML = detallesHTML;
-    document.getElementById('facturaTotal').innerHTML = `<strong>Total: Bs ${totalPedido.toFixed(2)}</strong>`;
-    document.getElementById('facturaFecha').innerHTML = nuevoPedido.fecha;
+    facturaUsuario.textContent = usuarioActual;
+    facturaCliente.textContent = `Cliente: ${cliente}`;
+    // limpiar y construir detalles
+    facturaDetalles.innerHTML = '';
+    detallesPedido.forEach(d => {
+        const p = document.createElement('p');
+        p.textContent = `${d.cantidad}x ${d.producto} (Bs ${d.precioUnitario.toFixed(2)} c/u) = Bs ${d.subtotal.toFixed(2)}`;
+        facturaDetalles.appendChild(p);
+    });
+    facturaTotal.innerHTML = `<strong>Total: Bs ${totalPedido.toFixed(2)}</strong>`;
+    facturaFecha.textContent = nuevoPedido.fecha;
     document.getElementById('factura').style.display = 'block';
     document.getElementById('factura').scrollIntoView({ behavior: 'smooth' });
 });
@@ -385,29 +515,32 @@ function registrarCambio(tipo, pedidoId, detalle) {
  */
 window.cargarHistorialCambios = function() {
     const listaCambiosElem = document.getElementById('listaCambios');
+    listaCambiosElem.innerHTML = '';
     if (historialDeCambios.length === 0) {
-        listaCambiosElem.innerHTML = '<p>No se han registrado modificaciones o eliminaciones de pedidos.</p>';
+        const p = document.createElement('p');
+        p.textContent = 'No se han registrado modificaciones o eliminaciones de pedidos.';
+        listaCambiosElem.appendChild(p);
         return;
     }
 
-    let html = '';
-    // Mostrar los cambios más recientes primero
     [...historialDeCambios].reverse().forEach(cambio => {
-        const color = cambio.tipo === 'ELIMINACION' ? 'style="border-color: #f44336; color: #f44336;"' : 'style="border-color: #008CBA; color: #008CBA;"';
-        
-        // Usamos pedido-item con un estilo modificado para el historial de cambios
-        html += `
-            <div class="pedido-item" ${color}>
-                <p><strong>Tipo:</strong> ${cambio.tipo}</p>
-                <p><strong>Pedido ID:</strong> ${cambio.pedidoId}</p>
-                <p><strong>Fecha/Hora:</strong> ${cambio.fecha}</p>
-                <p><strong>Usuario:</strong> ${cambio.usuario}</p>
-                <p><strong>Detalle:</strong> ${cambio.detalle}</p>
-            </div>
-        `;
-    });
+        const item = document.createElement('div');
+        item.className = 'pedido-item';
+        if (cambio.tipo === 'ELIMINACION') item.style.borderColor = '#f44336'; else item.style.borderColor = '#008CBA';
 
-    listaCambiosElem.innerHTML = html;
+        const tipo = document.createElement('p'); tipo.innerHTML = `<strong>Tipo:</strong> ${cambio.tipo}`;
+        const pid = document.createElement('p'); pid.innerHTML = `<strong>Pedido ID:</strong> ${cambio.pedidoId}`;
+        const fh = document.createElement('p'); fh.innerHTML = `<strong>Fecha/Hora:</strong> ${cambio.fecha}`;
+        const us = document.createElement('p'); us.innerHTML = `<strong>Usuario:</strong> ${cambio.usuario}`;
+        const det = document.createElement('p'); det.innerHTML = `<strong>Detalle:</strong> ${cambio.detalle}`;
+
+        item.appendChild(tipo);
+        item.appendChild(pid);
+        item.appendChild(fh);
+        item.appendChild(us);
+        item.appendChild(det);
+        listaCambiosElem.appendChild(item);
+    });
 }
 
 /**
@@ -441,71 +574,86 @@ window.cargarGastos = function() {
  */
 window.cargarHistorial = function() {
     const listaPedidosElem = document.getElementById('listaPedidos');
+    listaPedidosElem.innerHTML = '';
     if (pedidosDia.length === 0) {
-        listaPedidosElem.innerHTML = '<p>No se han registrado pedidos en esta caja.</p>';
+        const p = document.createElement('p');
+        p.textContent = 'No se han registrado pedidos en esta caja.';
+        listaPedidosElem.appendChild(p);
         return;
     }
 
-    let html = '';
     pedidosDia.forEach(pedido => {
-        const detallesHTML = pedido.detalles.map(d =>
-            `<li>${d.cantidad}x ${d.producto} (Bs ${d.precioUnitario.toFixed(2)})</li>`
-        ).join('');
+        const item = document.createElement('div');
+        item.className = 'pedido-item';
+        item.id = `pedido-${pedido.id}`;
 
-        html += `
-            <div class="pedido-item" id="pedido-${pedido.id}">
-                <p><strong>Pedido ID:</strong> ${pedido.id}</p>
-                <p><strong>Cliente:</strong> <span id="cliente-display-${pedido.id}">${pedido.cliente}</span></p>
-                <p><strong>Atendido por:</strong> ${pedido.usuario}</p>
-                <p><strong>Fecha/Hora:</strong> ${pedido.fecha}</p>
-                <p><strong>Total:</strong> <span class="total">Bs ${pedido.total.toFixed(2)}</span></p>
-                <p><strong>Detalles:</strong></p>
-                <ul>${detallesHTML}</ul>
-                <div id="edit-form-${pedido.id}" style="display:none; margin-top: 10px;"></div>
-                <div class="actions">
-                    <button class="edit-button" onclick="iniciarEdicionPedido(${pedido.id})"><i class="fas fa-pencil-alt"></i> Editar Cliente</button>
-                    <button style="background-color: #f44336 !important;" onclick="eliminarPedido(${pedido.id})"><i class="fas fa-trash-alt"></i> Eliminar</button>
-                </div>
-            </div>
-        `;
+        const pid = document.createElement('p'); pid.innerHTML = `<strong>Pedido ID:</strong> ${pedido.id}`;
+        const clienteP = document.createElement('p');
+        clienteP.innerHTML = `<strong>Cliente:</strong> <span id="cliente-display-${pedido.id}"></span>`;
+        clienteP.querySelector(`#cliente-display-${pedido.id}`).textContent = pedido.cliente;
+        const usuarioP = document.createElement('p'); usuarioP.innerHTML = `<strong>Atendido por:</strong> ${pedido.usuario}`;
+        const fechaP = document.createElement('p'); fechaP.innerHTML = `<strong>Fecha/Hora:</strong> ${pedido.fecha}`;
+        const totalP = document.createElement('p'); totalP.innerHTML = `<strong>Total:</strong> <span class="total">Bs ${pedido.total.toFixed(2)}</span>`;
+        const detallesTitle = document.createElement('p'); detallesTitle.innerHTML = '<strong>Detalles:</strong>';
+        const ul = document.createElement('ul');
+        pedido.detalles.forEach(d => {
+            const li = document.createElement('li');
+            li.textContent = `${d.cantidad}x ${d.producto} (Bs ${d.precioUnitario.toFixed(2)})`;
+            ul.appendChild(li);
+        });
+
+        const editForm = document.createElement('div'); editForm.id = `edit-form-${pedido.id}`; editForm.style.display = 'none'; editForm.style.marginTop = '10px';
+        const actions = document.createElement('div'); actions.className = 'actions';
+        const editBtn = document.createElement('button'); editBtn.className = 'edit-button'; editBtn.type = 'button'; editBtn.innerHTML = '<i class="fas fa-pencil-alt"></i> Editar Cliente'; editBtn.addEventListener('click', () => iniciarEdicionPedido(pedido.id));
+        const delBtn = document.createElement('button'); delBtn.type = 'button'; delBtn.style.backgroundColor = '#f44336'; delBtn.innerHTML = '<i class="fas fa-trash-alt"></i> Eliminar'; delBtn.addEventListener('click', () => eliminarPedido(pedido.id));
+        actions.appendChild(editBtn); actions.appendChild(delBtn);
+
+        item.appendChild(pid);
+        item.appendChild(clienteP);
+        item.appendChild(usuarioP);
+        item.appendChild(fechaP);
+        item.appendChild(totalP);
+        item.appendChild(detallesTitle);
+        item.appendChild(ul);
+        item.appendChild(editForm);
+        item.appendChild(actions);
+
+        listaPedidosElem.appendChild(item);
     });
-
-    listaPedidosElem.innerHTML = html;
 }
 
 /**
  * Elimina un pedido y registra el cambio.
  * @param {number} pedidoId - El ID (timestamp) del pedido a eliminar.
  */
-window.eliminarPedido = function(pedidoId) {
-    let password = prompt('Ingrese la contraseña para eliminar el pedido:');
-    if (password !== '1234') {
-        alert('Contraseña incorrecta.');
+window.eliminarPedido = async function(pedidoId) {
+    // Solicitar contraseña
+    const pw = await showModal('Ingrese la contraseña para eliminar el pedido:', { input: true });
+    if (pw === null) return; // usuario canceló
+    if (pw !== ADMIN_PASSWORD) {
+        showToast('Contraseña incorrecta');
         return;
     }
 
-    if (!confirm(`¿Está seguro de que desea ELIMINAR el pedido con ID ${pedidoId}? Esta acción es irreversible y afectará el cálculo del cierre de caja.`)) {
-        return;
-    }
+    // Confirmación final
+    const ok = await showModal(`¿Está seguro de que desea ELIMINAR el pedido con ID ${pedidoId}? Esta acción es irreversible y afectará el cálculo del cierre de caja.`, { input: false });
+    if (!ok) return;
 
-    const index = pedidosDia.findIndex(p => p.id === pedidoId);
-    if (index !== -1) {
+    // Realizar eliminación con pequeño retardo para UX
+    setTimeout(() => {
+        const index = pedidosDia.findIndex(p => p.id === pedidoId);
+        if (index === -1) return;
         const pedidoEliminado = pedidosDia[index];
         pedidosDia.splice(index, 1);
-        
-        // REGISTRAR CAMBIO
         registrarCambio(
             'ELIMINACION',
             pedidoId,
             `Pedido de Bs ${pedidoEliminado.total.toFixed(2)} para "${pedidoEliminado.cliente}" eliminado. Venta total disminuida.`
         );
-
         guardarEstado();
-        alert(`✅ Pedido ID ${pedidoId} eliminado con éxito.`);
+        showToast(`Pedido ID ${pedidoId} eliminado con éxito.`);
         cargarHistorial();
-    } else {
-        alert(`❌ Error: No se encontró el pedido con ID ${pedidoId}.`);
-    }
+    }, 250);
 }
 
 /**
@@ -522,17 +670,38 @@ window.iniciarEdicionPedido = function(pedidoId) {
     document.querySelectorAll('[id^="edit-form-"]').forEach(f => f.style.display = 'none');
     document.querySelectorAll('[id^="cliente-display-"]').forEach(d => d.style.display = 'inline');
 
-
     currentDisplay.style.display = 'none';
     formContainer.style.display = 'block';
+    formContainer.innerHTML = '';
 
-    formContainer.innerHTML = `
-        <label for="nuevoCliente-${pedidoId}">Nuevo Cliente:</label>
-        <input type="text" id="nuevoCliente-${pedidoId}" value="${pedido.cliente}" placeholder="Nombre del cliente" required>
-        <button onclick="guardarEdicionPedido(${pedidoId}, document.getElementById('nuevoCliente-${pedidoId}').value, '${pedido.cliente}')">Guardar</button>
-        <button style="background-color: #6c757d !important;" onclick="cancelarEdicionPedido(${pedidoId})">Cancelar</button>
-    `;
-    document.getElementById(`nuevoCliente-${pedidoId}`).focus();
+    const label = document.createElement('label');
+    label.htmlFor = `nuevoCliente-${pedidoId}`;
+    label.textContent = 'Nuevo Cliente:';
+
+    const inputEl = document.createElement('input');
+    inputEl.type = 'text';
+    inputEl.id = `nuevoCliente-${pedidoId}`;
+    inputEl.value = pedido.cliente || '';
+    inputEl.placeholder = 'Nombre del cliente';
+    inputEl.required = true;
+
+    const saveBtn = document.createElement('button');
+    saveBtn.type = 'button';
+    saveBtn.textContent = 'Guardar';
+    saveBtn.addEventListener('click', () => guardarEdicionPedido(pedidoId, inputEl.value, pedido.cliente));
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.type = 'button';
+    cancelBtn.style.backgroundColor = '#6c757d';
+    cancelBtn.textContent = 'Cancelar';
+    cancelBtn.addEventListener('click', () => cancelarEdicionPedido(pedidoId));
+
+    formContainer.appendChild(label);
+    formContainer.appendChild(inputEl);
+    formContainer.appendChild(saveBtn);
+    formContainer.appendChild(cancelBtn);
+
+    inputEl.focus();
 }
 
 /**
@@ -786,5 +955,72 @@ window.cerrarCajaDefinitivo = function() {
         limpiarEstado();
         alert('Caja cerrada con éxito. Los datos del día han sido borrados.');
         showTab('inicio');
+    }
+}
+
+// --- Funciones de UI para sesiones ---
+window.exportSession = function() {
+    const key = getSessionKey();
+    const raw = localStorage.getItem(key);
+    const payload = raw ? raw : JSON.stringify({ pedidosDia, gastosDia, historialDeCambios });
+    const blob = new Blob([payload], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${key}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+}
+
+window.listSessionsUI = function() {
+    const sessions = listSessions();
+    if (sessions.length === 0) {
+        alert('No hay sesiones guardadas.');
+        return;
+    }
+    const msg = sessions.map(s => s.date).join('\n');
+    alert('Sesiones disponibles (más recientes primero):\n' + msg);
+}
+
+window.importSessionFromFile = function(event) {
+    const file = event.target.files && event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const data = JSON.parse(e.target.result);
+            // si el JSON tiene una key top-level, permitir cargarla
+            const key = data.key || getSessionKey();
+            localStorage.setItem(key, JSON.stringify(data));
+            showToast('Sesión importada: ' + key);
+        } catch (err) {
+            showToast('Error importando archivo: formato inválido');
+            console.error(err);
+        }
+    };
+    reader.readAsText(file);
+}
+
+function loadSessionFromKey(key) {
+    const raw = localStorage.getItem(key);
+    if (!raw) return false;
+    try {
+        const s = JSON.parse(raw);
+        cajaAbierta = !!s.cajaAbierta;
+        usuarioActual = s.usuarioActual || '';
+        montoInicial = parseFloat(s.montoInicial) || 0;
+        pedidosDia = Array.isArray(s.pedidosDia) ? s.pedidosDia : [];
+        historialDeCambios = Array.isArray(s.historialDeCambios) ? s.historialDeCambios : [];
+        pedidoCounter = parseInt(s.pedidoCounter) || 0;
+        gastosDia = Array.isArray(s.gastosDia) ? s.gastosDia : [];
+        carrito = s.carrito || {};
+        guardarEstado();
+        showToast('Sesión cargada: ' + key);
+        return true;
+    } catch (e) {
+        console.error('Error al cargar sesión por key:', e);
+        return false;
     }
 }

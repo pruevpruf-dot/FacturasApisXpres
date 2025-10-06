@@ -21,6 +21,12 @@
         <img src="imagenes/logo.png" alt="Logo APIS xpress" style="width: 159px; height: auto; margin-bottom: 10px;">
      
         <p>Facturación de pedidos rápida y fácil</p>
+            <div style="margin-top:10px;">
+                <button type="button" onclick="window.listSessionsUI()">Listar sesiones</button>
+                <button type="button" onclick="window.exportSession()">Exportar sesión</button>
+                <button type="button" onclick="document.getElementById('importFile').click()">Importar sesión</button>
+                <input id="importFile" type="file" accept="application/json" style="display:none" onchange="window.importSessionFromFile(event)">
+            </div>
     </header>
     
     <nav>
@@ -233,6 +239,21 @@
         <div id="listaGastos"></div>
     </div>
     
+    <!-- Contenedor para toasts -->
+    <div id="toast-container" aria-live="polite" aria-atomic="true"></div>
+
+    <!-- Modal genérico -->
+    <div id="modal" class="modal" style="display:none;">
+        <div class="modal-content">
+            <p id="modal-message"></p>
+            <input id="modal-input" type="password" style="display:none; width:100%; padding:8px; margin-top:8px;" placeholder="Ingrese contraseña">
+            <div style="text-align:right; margin-top:12px;">
+                <button id="modal-cancel" type="button">Cancelar</button>
+                <button id="modal-ok" type="button">Aceptar</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Enlace a tu archivo JavaScript externo -->
     <script src="script.js"></script>
 </body>
