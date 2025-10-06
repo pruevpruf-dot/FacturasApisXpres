@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>App de Facturación de Apis Xpress</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <!-- Enlace a Font Awesome para los iconos -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Enlace a jsPDF para generar PDFs -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <!-- Enlace a tu archivo CSS externo -->
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="usuarioActivo" class="usuario-activo" style="display: none;">
+        <i class="fas fa-user"></i> <span id="nombreUsuario"></span>
+    </div>
+    
+    <header style="text-align: center; padding: 20px;">
+        <img src="imagenes/logo.png" alt="Logo APIS xpress" style="width: 159px; height: auto; margin-bottom: 10px;">
+     
+        <p>Facturación de pedidos rápida y fácil</p>
+    </header>
+    
+    <nav>
+        <button onclick="showTab('inicio')" class="active" id="btnInicio">
+            <i class="fas fa-cash-register"></i> Inicio de Caja
+        </button>
+        <button onclick="showTab('gastos')" id="btnGastos" disabled>
+            <i class="fas fa-money-bill-wave"></i> Gastos Varios
+        </button>
+        <button onclick="showTab('pedido')" id="btnPedido" disabled>
+            <i class="fas fa-shopping-cart"></i> Realizar Pedido
+        </button>
+        <button onclick="showTab('historial')" id="btnHistorial" disabled>
+            <i class="fas fa-history"></i> Historial de Pedidos
+        </button>
+        <button onclick="showTab('cambios')" id="btnCambios" disabled>
+            <i class="fas fa-edit"></i> Historial de Cambios
+        </button>
+        <button onclick="showTab('cierre')" id="btnCierre" disabled>
+            <i class="fas fa-lock"></i> Cierre de Caja
+        </button>
+    </nav>
+
+    <div id="inicio" class="tab-content active">
+        <h2><i class="fas fa-unlock"></i> Inicio de Caja</h2>
+        <form id="formInicio">
+            <label for="usuario"><i class="fas fa-user"></i> Usuario:</label>
+            <input type="text" id="usuario" placeholder="Ingrese su nombre de usuario" required>
+            <label for="montoInicial"><i class="fas fa-money-bill-wave"></i> Monto Inicial de Caja (Bs):</label>
+            <input type="number" id="montoInicial" step="0.01" min="0.01" placeholder="Ingrese una cantidad" required>
+            <button type="submit"><i class="fas fa-unlock-alt"></i> Abrir Caja</button>
+        </form>
+        <div id="statusInicio" class="mensaje-caja" style="display:none;"></div>
+    </div>
+
+    <div id="pedido" class="tab-content">
+        <h2><i class="fas fa-shopping-basket"></i> Realizar Pedido - Seleccione Productos</h2>
+        <div class="productos-grid" id="productosGrid">
+            
+            <div class="producto-card" data-producto="Api Morado" data-precio="7.00">
+                <img src="imagenes/morado.jpg" alt="Api Morado" class="producto-img">
+                <h3>Api Morado</h3>
+                <p>Bs 7.00</p>
+                <input type="number" class="cantidad-input" min="0" value="0" data-producto="Api Morado">
+            </div>
+            
+            <div class="producto-card" data-producto="Api Blanco" data-precio="7.00">
+                <img src="imagenes/amarillo.jpg" alt="Api Blanco" class="producto-img">
+                <h3>Api Blanco</h3>
+                <p>Bs 7.00</p>
+                <input type="number" class="cantidad-input" min="0" value="0" data-producto="Api Blanco">
+            </div>
+
+            <div class="producto-card" data-producto="Api Mixto" data-precio="7.00">
+                <img src="imagenes/mixto.jpg" alt="Api Mixto" class="producto-img">
+                <h3>Api Mixto</h3>
+                <p>Bs 7.00</p>
+                <input type="number" class="cantidad-input" min="0" value="0" data-producto="Api Mixto">
+            </div>
+            
+            <div class="producto-card" data-producto="Tojori C/L" data-precio="7.00">
+                <img src="imagenes/tojoriconleche.jpg" alt="Tojori Con Leche" class="producto-img">
+                <h3>Tojori C/L</h3>
+                <p>Bs 7.00</p>
+                <input type="number" class="cantidad-input" min="0" value="0" data-producto="Tojori C/L">
+            </div>
+
+            <div class="producto-card" data-producto="Tojori S/L" data-precio="7.00">
+                <img src="imagenes/tojori.jpg" alt="Tojori Sin Leche" class="producto-img">
+                <h3>Tojori S/L</h3>
+                <p>Bs 7.00</p>
+                <input type="number" class="cantidad-input" min="0" value="0" data-producto="Tojori S/L">
+            </div>
+
+            <div class="producto-card" data-producto="Arroz C/L C/C" data-precio="10.00">
+                <img src="imagenes/arrozCC.jpg" alt="Arroz con Leche con Canela" class="producto-img">
+                <h3>Arroz C/L C/C</h3>
+                <p>Bs 10.00</p>
+                <input type="number" class="cantidad-input" min="0" value="0" data-producto="Arroz C/L C/C">
+            </div>
+
+            <div class="producto-card" data-producto="Arroz C/L S/C" data-precio="10.00">
+                <img src="imagenes/arrozSC.jpg" alt="Arroz con Leche sin Canela" class="producto-img">
+                <h3>Arroz C/L S/C</h3>
+                <p>Bs 10.00</p>
+                <input type="number" class="cantidad-input" min="0" value="0" data-producto="Arroz C/L S/C">
+            </div>
+
+            <div class="producto-card" data-producto="Pastel C/A" data-precio="7.00">
+                <img src="imagenes/pastelCA.jpg" alt="Pastel con Ajiaco" class="producto-img">
+                <h3>Pastel C/A</h3>
+                <p>Bs 7.00</p>
+                <input type="number" class="cantidad-input" min="0" value="0" data-producto="Pastel C/A">
+            </div>
+            
+            <div class="producto-card" data-producto="Pastel S/A" data-precio="7.00">
+                <img src="imagenes/pastelSA.jpg" alt="Pastel sin Ajiaco" class="producto-img">
+                <h3>Pastel S/A</h3>
+                <p>Bs 7.00</p>
+                <input type="number" class="cantidad-input" min="0" value="0" data-producto="Pastel S/A">
+            </div>
+
+            <div class="producto-card" data-producto="Buñuelo C/M" data-precio="0.50">
+                <img src="imagenes/buñueloSM.jpg" alt="Buñuelo con Miel" class="producto-img">
+                <h3>Buñuelo C/M</h3>
+                <p>Bs 0.50</p>
+                <input type="number" class="cantidad-input" min="0" value="0" data-producto="Buñuelo C/M">
+            </div>
+
+            <div class="producto-card" data-producto="Buñuelo S/M" data-precio="0.50">
+                <img src="imagenes/buñueloSM.jpg" alt="Buñuelo sin Miel" class="producto-img">
+                <h3>Buñuelo S/M</h3>
+                <p>Bs 0.50</p>
+                <input type="number" class="cantidad-input" min="0" value="0" data-producto="Buñuelo S/M">
+            </div>
+
+            <div class="producto-card" data-producto="Tawa Tawa C/M" data-precio="1.00">
+                <img src="imagenes/tawasCM.jpg" alt="Tawa Tawa con Miel" class="producto-img">
+                <h3>Tawa Tawa C/M</h3>
+                <p>Bs 1.00</p>
+                <input type="number" class="cantidad-input" min="0" value="0" data-producto="Tawa Tawa C/M">
+            </div>
+
+            <div class="producto-card" data-producto="Tawa Tawa S/M" data-precio="1.00">
+                <img src="imagenes/tawasCM.jpg" alt="Tawa Tawa sin Miel" class="producto-img">
+                <h3>Tawa Tawa S/M</h3>
+                <p>Bs 1.00</p>
+                <input type="number" class="cantidad-input" min="0" value="0" data-producto="Tawa Tawa S/M">
+            </div>
+
+            <div class="producto-card" data-producto="Tawa Tawa C/A" data-precio="1.00">
+                <img src="imagenes/tawasCM.jpg" alt="Tawa Tawa con Ajiaco" class="producto-img">
+                <h3>Tawa Tawa C/A</h3>
+                <p>Bs 1.00</p>
+                <input type="number" class="cantidad-input" min="0" value="0" data-producto="Tawa Tawa C/A">
+            </div>
+
+            <div class="producto-card" data-producto="Tawa Tawa S/A" data-precio="1.00">
+                <img src="imagenes/tawasCM.jpg" alt="Tawa Tawa sin Ajiaco" class="producto-img">
+                <h3>Tawa Tawa S/A</h3>
+                <p>Bs 1.00</p>
+                <input type="number" class="cantidad-input" min="0" value="0" data-producto="Tawa Tawa S/A">
+            </div>
+
+            <div class="producto-card" data-producto="Chocolatada" data-precio="10.00">
+                <img src="imagenes/chocolatada.jpg" alt="Chocolatada" class="producto-img">
+                <h3>Chocolatada</h3>
+                <p>Bs 10.00</p>
+                <input type="number" class="cantidad-input" min="0" value="0" data-producto="Chocolatada">
+            </div>
+        </div>
+        
+        <div class="carrito">
+            <h3><i class="fas fa-shopping-cart"></i> Carrito de Compra</h3>
+            <div id="carritoItems"></div>
+            <div class="carrito-total" id="carritoTotal">Total: Bs 0.00</div>
+            
+            <form id="formPedido">
+                <label for="cliente"><i class="fas fa-user-tag"></i> Nombre del Cliente (opcional):</label>
+                <input type="text" id="cliente" placeholder="Cliente Anónimo">
+                <button type="submit" id="btnConfirmarPedido"><i class="fas fa-receipt"></i> Confirmar y Facturar Pedido</button>
+            </form>
+        </div>
+        
+        <div id="factura" style="display: none;">
+            <h3>Factura - Api Boliviano</h3>
+            <p><strong>Atendido por:</strong> <span id="facturaUsuario"></span></p>
+            <p id="facturaCliente"></p>
+            <div id="facturaDetalles"></div>
+            <p id="facturaTotal"></p>
+            <p>Fecha: <span id="facturaFecha"></span></p>
+            <button onclick="window.print(); ocultarFactura();"><i class="fas fa-print"></i> Imprimir y Cerrar</button>
+        </div>
+    </div>
+    
+    <div id="historial" class="tab-content">
+        <h2><i class="fas fa-history"></i> Historial de Pedidos del Día</h2>
+        <div id="listaPedidos"></div>
+    </div>
+    
+    <div id="cambios" class="tab-content">
+        <h2><i class="fas fa-edit"></i> Historial de Cambios y Eliminaciones</h2>
+        <div id="listaCambios">
+            <p>No se han registrado modificaciones o eliminaciones de pedidos.</p>
+        </div>
+    </div>
+    
+    <div id="cierre" class="tab-content">
+        <h2><i class="fas fa-lock"></i> Cierre de Caja</h2>
+        <form id="formCierre">
+            <label for="montoFinal"><i class="fas fa-money-check-alt"></i> Monto Final de Caja (Bs):</label>
+            <input type="number" id="montoFinal" step="0.01" min="0.00" placeholder="Ingrese una cantidad" required>
+            <button type="submit"><i class="fas fa-calculator"></i> Calcular Cierre de Caja</button>
+        </form>
+
+        <div id="statusCierre" class="resumen-cierre" style="display:none;"></div>
+
+        <div id="printArea" style="display:none;"></div>
+    </div>
+
+    <div id="gastos" class="tab-content">
+        <h2><i class="fas fa-money-bill-wave"></i> Gastos Varios</h2>
+        <form id="formGasto">
+            <label for="detalleGasto"><i class="fas fa-list"></i> Detalle del Gasto:</label>
+            <input type="text" id="detalleGasto" placeholder="Ej: Compra de servilletas" required>
+            <label for="montoGasto"><i class="fas fa-dollar-sign"></i> Monto (Bs):</label>
+            <input type="number" id="montoGasto" step="0.01" min="0.01" placeholder="Ingrese el monto" required>
+            <button type="submit"><i class="fas fa-plus"></i> Agregar Gasto</button>
+        </form>
+        <div id="listaGastos"></div>
+    </div>
+    
+    <!-- Enlace a tu archivo JavaScript externo -->
+    <script src="script.js"></script>
+</body>
+</html>
